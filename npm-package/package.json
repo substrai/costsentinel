@@ -1,6 +1,6 @@
 {
   "name": "substrai-costsentinel",
-  "version": "0.3.0",
+  "version": "0.4.1",
   "description": "Real-time GenAI cost governance framework — budget enforcement, model routing, and attribution for LLM API calls",
   "main": "index.js",
   "types": "index.d.ts",
