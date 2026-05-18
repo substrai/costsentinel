@@ -1,0 +1,29 @@
+{
+  "name": "substrai-costsentinel",
+  "version": "0.1.0",
+  "description": "Real-time GenAI cost governance framework — budget enforcement, model routing, and attribution for LLM API calls",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "keywords": [
+    "llm",
+    "cost",
+    "governance",
+    "budget",
+    "genai",
+    "serverless",
+    "aws",
+    "lambda",
+    "middleware",
+    "finops"
+  ],
+  "author": "Gaurav Kumar Sinha <gaurav@substrai.dev>",
+  "license": "MIT",
+  "homepage": "https://substrai.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/substrai/costsentinel"
+  },
+  "bugs": {
+    "url": "https://github.com/substrai/costsentinel/issues"
+  }
+}
