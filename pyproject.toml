@@ -30,7 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 aws = ["boto3>=1.28.0"]
-dev = ["pytest>=7.0", "pytest-cov>=4.0"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.4.0", "mypy>=1.10.0"]
 
 [project.scripts]
 costsentinel = "costsentinel.cli.main:main"

@@ -1,5 +1,10 @@
 # CostSentinel
 
+[![CI](https://github.com/substrai/costsentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/substrai/costsentinel/actions/workflows/ci.yml)
+[![PyPI version](https://badge.fury.io/py/substrai-costsentinel.svg)](https://pypi.org/project/substrai-costsentinel/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+
 **AI cost governance middleware** — budget enforcement, attribution, and reporting for LLM API calls.
 
 CostSentinel sits between your application and LLM providers, tracking every token spent, enforcing budget policies, and attributing costs to teams, users, and endpoints. Zero external dependencies beyond PyYAML.
