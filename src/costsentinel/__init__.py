@@ -5,6 +5,7 @@ __version__ = "0.1.0"
 from costsentinel.core.config import CostSentinelConfig, PolicyConfig, load_config
 from costsentinel.core.pricing import PricingEngine
 from costsentinel.core.state import CostState
+from costsentinel.core.dynamodb_state import DynamoDBCostState
 from costsentinel.middleware.interceptor import CostMiddleware, cost_tracked, CallResult
 from costsentinel.policies.budget import BudgetEnforcer, BudgetDecision, BudgetExceededError
 from costsentinel.policies.attribution import CostAttribution, AttributionStore
@@ -16,6 +17,7 @@ __all__ = [
     "load_config",
     "PricingEngine",
     "CostState",
+    "DynamoDBCostState",
     "CostMiddleware",
     "cost_tracked",
     "CallResult",
