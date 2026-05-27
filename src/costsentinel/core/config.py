@@ -54,12 +54,19 @@ class CostSentinelConfig:
         return None
 
 
-def load_config(path: Optional[str] = None) -> CostSentinelConfig:
+def load_config(path: Optional[str] = None, env: Optional[str] = None) -> CostSentinelConfig:
     """Load CostSentinel configuration from a YAML file.
+
+    Supports environment-specific overrides. If the YAML file contains an
+    `environments:` block, values for the specified environment are merged
+    on top of the base configuration.
 
     Args:
         path: Path to the YAML config file. If None, searches for
               costsentinel.yaml in the current directory and parent directories.
+        env: Environment name (e.g., "dev", "staging", "prod"). If None,
+             reads from COSTSENTINEL_ENV environment variable, defaulting
+             to "dev".
 
     Returns:
         CostSentinelConfig instance.
@@ -81,7 +88,77 @@ def load_config(path: Optional[str] = None) -> CostSentinelConfig:
     if raw is None:
         raw = {}
 
+    # Resolve environment
+    env = env or os.environ.get("COSTSENTINEL_ENV", "dev")
+
+    # Apply environment overrides if present
+    raw = _apply_environment_overrides(raw, env)
+
     return _parse_config(raw)
+
+
+def _apply_environment_overrides(raw: Dict[str, Any], env: str) -> Dict[str, Any]:
+    """Apply environment-specific overrides to the base configuration.
+
+    The YAML file can contain an `environments:` block with per-environment
+    overrides that are deep-merged onto the base config:
+
+    ```yaml
+    project_name: my-project
+    policies:
+      global:
+        limit_daily: 100.0
+
+    environments:
+      staging:
+        policies:
+          global:
+            limit_daily: 50.0
+      prod:
+        policies:
+          global:
+            limit_daily: 500.0
+        state_file: /var/costsentinel/state.json
+    ```
+
+    Args:
+        raw: The full parsed YAML dict.
+        env: The environment name to apply.
+
+    Returns:
+        The merged configuration dict (without the environments block).
+    """
+    environments = raw.pop("environments", None)
+    if not environments or env not in environments:
+        return raw
+
+    overrides = environments[env]
+    return _deep_merge(raw, overrides)
+
+
+def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    """Deep merge override dict into base dict.
+
+    For nested dicts, merges recursively. For all other types,
+    override values replace base values.
+
+    Args:
+        base: The base dictionary.
+        override: The override dictionary.
+
+    Returns:
+        Merged dictionary (modifies base in-place and returns it).
+    """
+    for key, value in override.items():
+        if (
+            key in base
+            and isinstance(base[key], dict)
+            and isinstance(value, dict)
+        ):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
 
 
 def _find_config_file() -> str:
