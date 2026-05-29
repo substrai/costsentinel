@@ -1,6 +1,6 @@
 """CostSentinel - AI cost governance middleware for LLM API calls."""
 
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 
 from costsentinel.core.config import CostSentinelConfig, PolicyConfig, load_config
 from costsentinel.core.pricing import PricingEngine
