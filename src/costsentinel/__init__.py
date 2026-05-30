@@ -6,7 +6,7 @@ from costsentinel.core.config import CostSentinelConfig, PolicyConfig, load_conf
 from costsentinel.core.pricing import PricingEngine
 from costsentinel.core.state import CostState
 from costsentinel.core.dynamodb_state import DynamoDBCostState
-from costsentinel.middleware.interceptor import CostMiddleware, cost_tracked, CallResult
+from costsentinel.middleware.interceptor import CostMiddleware, cost_tracked, CallResult, RateLimitExceededError
 from costsentinel.policies.budget import BudgetEnforcer, BudgetDecision, BudgetExceededError
 from costsentinel.policies.attribution import CostAttribution, AttributionStore
 from costsentinel.reporting.reporter import CostReporter
@@ -21,6 +21,7 @@ __all__ = [
     "CostMiddleware",
     "cost_tracked",
     "CallResult",
+    "RateLimitExceededError",
     "BudgetEnforcer",
     "BudgetDecision",
     "BudgetExceededError",

@@ -14,6 +14,7 @@ from costsentinel.core.pricing import PricingEngine
 from costsentinel.core.state import CostState
 from costsentinel.policies.attribution import AttributionStore, CostAttribution
 from costsentinel.policies.budget import BudgetDecision, BudgetEnforcer, BudgetExceededError
+from costsentinel.policies.rate_limit import RateLimiter, RateLimitDecision
 
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -31,6 +32,22 @@ class CallResult:
     budget_remaining: float = 0.0
     decision: Optional[BudgetDecision] = None
     duration_ms: float = 0.0
+    rate_limited: bool = False
+    rate_limit_decision: Optional[RateLimitDecision] = None
+
+
+class RateLimitExceededError(Exception):
+    """Raised when a request exceeds the configured rate limit."""
+
+    def __init__(self, scope: str, scope_id: str, decision: RateLimitDecision):
+        self.scope = scope
+        self.scope_id = scope_id
+        self.decision = decision
+        super().__init__(
+            f"Rate limit exceeded for {scope}:{scope_id}. "
+            f"Limit: {decision.limit}/min, remaining: {decision.remaining}. "
+            f"Retry after: {decision.reset_at:.0f}"
+        )
 
 
 class CostMiddleware:
@@ -65,10 +82,64 @@ class CostMiddleware:
         self._budget = BudgetEnforcer(self._config, self._state)
         self._attribution = AttributionStore(self._config.attribution_file)
 
+        # Initialize rate limiter from config
+        rate_limits = self._config.rate_limits or {}
+        self._rate_limiter = RateLimiter(
+            global_rpm=rate_limits.get("requests_per_minute", 1000),
+            per_user_rpm=rate_limits.get("per_user_rpm", 30),
+            per_team_rpm=rate_limits.get("per_team_rpm", 200),
+        )
+
     @property
     def config(self) -> CostSentinelConfig:
         """Access the configuration."""
         return self._config
+
+    @property
+    def rate_limiter(self) -> RateLimiter:
+        """Access the rate limiter."""
+        return self._rate_limiter
+
+    def check_rate_limit(
+        self,
+        user_id: Optional[str] = None,
+        team_id: Optional[str] = None,
+    ) -> None:
+        """Check rate limits before making an LLM call.
+
+        Checks global, user, and team rate limits. Raises
+        RateLimitExceededError if any limit is exceeded.
+
+        Args:
+            user_id: Optional user identifier for per-user limits.
+            team_id: Optional team identifier for per-team limits.
+
+        Raises:
+            RateLimitExceededError: If any rate limit is exceeded.
+        """
+        # Check global rate limit
+        global_decision = self._rate_limiter.check("global", "default")
+        if not global_decision.allowed:
+            raise RateLimitExceededError("global", "default", global_decision)
+
+        # Check per-user rate limit
+        if user_id:
+            user_decision = self._rate_limiter.check("user", user_id)
+            if not user_decision.allowed:
+                raise RateLimitExceededError("user", user_id, user_decision)
+
+        # Check per-team rate limit
+        if team_id:
+            team_decision = self._rate_limiter.check("team", team_id)
+            if not team_decision.allowed:
+                raise RateLimitExceededError("team", team_id, team_decision)
+
+        # Consume tokens from all applicable buckets
+        self._rate_limiter.consume("global", "default")
+        if user_id:
+            self._rate_limiter.consume("user", user_id)
+        if team_id:
+            self._rate_limiter.consume("team", team_id)
 
     @property
     def pricing(self) -> PricingEngine:
