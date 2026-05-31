@@ -15,6 +15,7 @@ from costsentinel.core.state import CostState
 from costsentinel.policies.attribution import AttributionStore, CostAttribution
 from costsentinel.policies.budget import BudgetDecision, BudgetEnforcer, BudgetExceededError
 from costsentinel.policies.rate_limit import RateLimiter, RateLimitDecision
+from costsentinel.policies.circuit_breaker import CircuitBreaker, CircuitBreakerTripped, CircuitDecision
 
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -90,6 +91,14 @@ class CostMiddleware:
             per_team_rpm=rate_limits.get("per_team_rpm", 200),
         )
 
+        # Initialize circuit breaker from config policies
+        global_policy = self._config.get_policy("global")
+        self._circuit_breaker = CircuitBreaker(
+            max_cost_per_request=global_policy.max_cost_per_request if global_policy and global_policy.max_cost_per_request else 0.50,
+            max_cost_per_session=5.00,
+            max_tokens_per_request=8000,
+        )
+
     @property
     def config(self) -> CostSentinelConfig:
         """Access the configuration."""
@@ -99,6 +108,51 @@ class CostMiddleware:
     def rate_limiter(self) -> RateLimiter:
         """Access the rate limiter."""
         return self._rate_limiter
+
+    @property
+    def circuit_breaker(self) -> CircuitBreaker:
+        """Access the circuit breaker."""
+        return self._circuit_breaker
+
+    def check_circuit_breaker(
+        self,
+        estimated_cost: float = 0.0,
+        input_tokens: int = 0,
+        session_id: Optional[str] = None,
+    ) -> None:
+        """Check circuit breaker limits before making an LLM call.
+
+        Enforces per-request cost limits, per-request token limits,
+        and per-session cumulative cost limits.
+
+        Args:
+            estimated_cost: Estimated cost of the upcoming request.
+            input_tokens: Number of input tokens for the request.
+            session_id: Optional session ID for session-level limits.
+
+        Raises:
+            CircuitBreakerTripped: If any circuit breaker threshold is exceeded.
+        """
+        # Check per-request limits
+        request_decision = self._circuit_breaker.check_request(
+            estimated_cost=estimated_cost, input_tokens=input_tokens
+        )
+        if not request_decision.allowed:
+            raise CircuitBreakerTripped(
+                request_decision.reason,
+                threshold=request_decision.threshold,
+                current=request_decision.current,
+            )
+
+        # Check per-session limits
+        if session_id:
+            session_decision = self._circuit_breaker.check_session(session_id)
+            if not session_decision.allowed:
+                raise CircuitBreakerTripped(
+                    session_decision.reason,
+                    threshold=session_decision.threshold,
+                    current=session_decision.current,
+                )
 
     def check_rate_limit(
         self,
