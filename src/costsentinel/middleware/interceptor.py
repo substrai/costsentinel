@@ -16,6 +16,7 @@ from costsentinel.policies.attribution import AttributionStore, CostAttribution
 from costsentinel.policies.budget import BudgetDecision, BudgetEnforcer, BudgetExceededError
 from costsentinel.policies.rate_limit import RateLimiter, RateLimitDecision
 from costsentinel.policies.circuit_breaker import CircuitBreaker, CircuitBreakerTripped, CircuitDecision
+from costsentinel.detection.anomaly import AnomalyDetector, AnomalyAlert
 
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -99,6 +100,10 @@ class CostMiddleware:
             max_tokens_per_request=8000,
         )
 
+        # Initialize anomaly detector for real-time alerts
+        self._anomaly_detector = AnomalyDetector()
+        self._anomaly_alerts: list = []
+
     @property
     def config(self) -> CostSentinelConfig:
         """Access the configuration."""
@@ -113,6 +118,62 @@ class CostMiddleware:
     def circuit_breaker(self) -> CircuitBreaker:
         """Access the circuit breaker."""
         return self._circuit_breaker
+
+    @property
+    def anomaly_detector(self) -> AnomalyDetector:
+        """Access the anomaly detector."""
+        return self._anomaly_detector
+
+    @property
+    def anomaly_alerts(self) -> list:
+        """Access recent anomaly alerts."""
+        return self._anomaly_alerts
+
+    def check_anomaly_post_call(
+        self,
+        model: str,
+        cost: float,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        scope: str = "global",
+        scope_id: str = "default",
+    ) -> Optional[AnomalyAlert]:
+        """Run anomaly detection after an LLM call completes.
+
+        Checks if the cost or token usage represents a spike relative
+        to the learned baseline. If an anomaly is detected, an alert
+        is stored and returned.
+
+        Args:
+            model: Model identifier used for the call.
+            cost: Actual cost of the completed call.
+            input_tokens: Input token count.
+            output_tokens: Output token count.
+            scope: Cost scope (global, team, endpoint, user).
+            scope_id: Identifier within the scope.
+
+        Returns:
+            AnomalyAlert if an anomaly was detected, None otherwise.
+        """
+        alert = self._anomaly_detector.check_cost(
+            scope=scope,
+            scope_id=scope_id,
+            current_cost=cost,
+        )
+
+        if alert:
+            self._anomaly_alerts.append(alert)
+            # Trigger configured alert channels
+            alert_config = self._config.alerts or {}
+            thresholds = alert_config.get("thresholds", [])
+            if alert.severity == "critical":
+                import logging
+                logging.getLogger("costsentinel").warning(
+                    f"ANOMALY DETECTED [{alert.severity}]: {alert.message} "
+                    f"(current={alert.current_value:.4f}, baseline={alert.baseline_value:.4f})"
+                )
+
+        return alert
 
     def check_circuit_breaker(
         self,
